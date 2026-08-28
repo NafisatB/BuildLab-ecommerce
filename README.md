@@ -41,9 +41,9 @@ npm install
 
 ## Environment Variables
 
-DATABASE_URL=
-PORT=
-NODE_ENV=
+- DATABASE_URL=
+- PORT=
+- NODE_ENV=
 
 ## Database Setup
 
@@ -57,17 +57,26 @@ npx prisma generate
 
 npm run start:dev
 
-## Swagger
 
-http://localhost:3000/docs
+## API Documentation
+
+Interactive Swagger/OpenAPI documentation:
+
+https://buildlab-ecommerce.onrender.com/api/docs
+
+## Live API
+
+Base URL:
+
+https://buildlab-ecommerce.onrender.com/api
 
 ## API Endpoints
 
-POST /api/products
-GET /api/products
-GET /api/products/:id
-PATCH /api/products/:id
-DELETE /api/products/:id
+- POST /api/products
+- GET /api/products
+- GET /api/products/:id
+- PATCH /api/products/:id
+- DELETE /api/products/:id
 
 ## Testing
 
