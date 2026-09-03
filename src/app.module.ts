@@ -11,10 +11,10 @@ import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({isGlobal: true,}),
+    ConfigModule.forRoot({ isGlobal: true, }),
     ProductsModule, DatabaseModule, AuthModule, UsersModule],
   controllers: [AppController],
   providers: [AppService, PasswordService, UsersService],
   exports: [PasswordService]
 })
-export class AppModule {}
+export class AppModule { }
