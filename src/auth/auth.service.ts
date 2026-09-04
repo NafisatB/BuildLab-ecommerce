@@ -1,8 +1,10 @@
-import { ConflictException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { PasswordService } from './password/password.service';
-import { RegisterDto } from './dto/dto';
+import { RegisterDto } from './dto/register.dto';
 import { error } from 'console';
+import { JwtService } from '@nestjs/jwt';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
@@ -10,7 +12,8 @@ export class AuthService {
 
     constructor(
         private readonly usersService: UsersService,
-        private readonly passwordService: PasswordService
+        private readonly passwordService: PasswordService,
+        private readonly jwtService: JwtService
     ){}
 
     async register(registerDto: RegisterDto){
@@ -41,5 +44,51 @@ export class AuthService {
         this.logger.error('User registration failed', error instanceof Error ? error.stack: undefined);
 
         throw new InternalServerErrorException('Unable to complete registration')
+    }
+
+    async login(loginDto: LoginDto){
+        const email = loginDto.email.trim().toLowerCase();
+        const user = await this.usersService.findByEmail(email);
+
+        if(!user){
+            throw new UnauthorizedException('Invalid email or password')
+        }
+
+        const passwordValid = await this.passwordService.verify(
+            user.password,
+            loginDto.password
+        );
+
+        if(!passwordValid){
+            throw new UnauthorizedException('Invalid email or password')
+        }
+
+        const payload = {
+            sub: user.id,
+            email: user.email,
+            role: user.role
+        };
+        try {
+            const accessToken = await this.jwtService.signAsync(payload);
+
+            return{
+                message: 'Login successful',
+                accessToken,
+                tokenType: 'Bearer',
+                expiresIn: '15m',
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    role: user.role
+                }
+            }
+        } catch (error) {
+            this.logger.error(
+                'JWT generation failed', error instanceof Error ? error.stack: undefined
+            );
+            throw new InternalServerErrorException('Unable to complete login')
+        }
     }
 }
