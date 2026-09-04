@@ -4,7 +4,7 @@ import { IsEmail, IsNotEmpty, IsString, Matches, MinLength } from "class-validat
 
 export class RegisterDto {
     @ApiProperty({
-        example: 'customer@example.com',
+        example: 'customer12@example.com',
         description: 'Customer email address'
     })
     @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
@@ -13,7 +13,7 @@ export class RegisterDto {
     email: string;
 
     @ApiProperty({
-        example: 'StrongPassword123$',
+        example: 'StrongPassword123!',
         description: 'Account password',
         minLength: 12
     })

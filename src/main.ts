@@ -25,10 +25,18 @@ async function bootstrap() {
   )
 
   const swaggerConfig = new DocumentBuilder()
-  .setTitle('E-Commerce Product Management API')
-  .setDescription('RESTful API for managing products in an e-commerce platform')
+  .setTitle('BuildLab E-Commerce API')
+  .setDescription('E-commerce backend API')
   .setVersion('1.0')
-  .addTag('Products')
+  .addBearerAuth(
+    {
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      description: 'Enter your JWT access token'
+    },
+    'access-token',
+  )
   .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
