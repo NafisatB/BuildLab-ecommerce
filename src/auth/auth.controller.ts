@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -36,6 +36,25 @@ export class AuthController {
         return this.authService.login(loginDto)
     }
 
+    @Post('logout')
+    @HttpCode(HttpStatus.OK)
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth('access-token')
+    @ApiOperation({
+        summary: 'Logout authenticated user',
+        description:
+            'Logs out the current user. With the current stateless JWT architecture, the client must discard the access token after logout.',
+    })
+    @ApiOkResponse({
+        description: 'Logout successful.',
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Authentication is required or the access token is invalid.',
+    })
+    async logout(@Req() request: AuthenticatedRequest) {
+        return this.authService.logout(request.user);
+    }
+
     @Get('me')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth('access-token')
@@ -43,8 +62,8 @@ export class AuthController {
         summary: 'Get authenticated user',
         description: 'Returns the currently authenticated user.',
     })
-    async me(@Req() request: 
-    AuthenticatedRequest) {
+    async me(@Req() request:
+        AuthenticatedRequest) {
         return {
             user: request.user,
         };

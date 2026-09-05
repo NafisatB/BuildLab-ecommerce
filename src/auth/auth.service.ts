@@ -91,4 +91,12 @@ export class AuthService {
             throw new InternalServerErrorException('Unable to complete login')
         }
     }
+
+    async logout(user: {
+        userId: string;
+        email: string;
+        role: string;
+    }){
+        return{message: 'Logout successful'}
+    }
 }
