@@ -1,5 +1,5 @@
-import {Body,Controller,Delete,Get,HttpCode,HttpStatus,Param,ParseUUIDPipe,Patch,Post,Query, UseGuards} from '@nestjs/common';
-import {ApiBearerAuth, ApiCreatedResponse,ApiOkResponse,ApiOperation,ApiParam,ApiTags} from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -12,22 +12,7 @@ import { UserRole } from 'generated/prisma/enums';
 @ApiTags('Products')
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
-
-  @Post()
-  @ApiOperation({
-    summary: 'Create a product',
-    description: 'Creates a new product in the catalog.',
-  })
-  @ApiCreatedResponse({
-    description: 'Product successfully created.',
-  })
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async create(@Body() createProductDto: CreateProductDto) {
-    return this.productsService.create(createProductDto);
-  }
+  constructor(private readonly productsService: ProductsService) { }
 
   @Get()
   @ApiOperation({
@@ -44,6 +29,7 @@ export class ProductsController {
   @Get(':id')
   @ApiOperation({
     summary: 'Retrieve a single product',
+    description: 'Returns a single product'
   })
   @ApiParam({
     name: 'id',
@@ -53,10 +39,28 @@ export class ProductsController {
   @ApiOkResponse({
     description: 'Product successfully retrieved.',
   })
+  @ApiNotFoundResponse({
+    description: 'Product not found'
+  })
   async findOne(
     @Param('id', new ParseUUIDPipe()) id: string,
   ) {
     return this.productsService.findOne(id);
+  }
+
+  @Post()
+  @ApiOperation({
+    summary: 'Create a product',
+    description: 'Creates a new product in the catalog.',
+  })
+  @ApiCreatedResponse({
+    description: 'Product successfully created.',
+  })
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async create(@Body() createProductDto: CreateProductDto) {
+    return this.productsService.create(createProductDto);
   }
 
   @Patch(':id')

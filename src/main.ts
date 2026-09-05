@@ -40,9 +40,31 @@ async function bootstrap() {
   .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
+
   SwaggerModule.setup('api/docs', app, document, {
     swaggerOptions: {
-      persistAuthorization: true
+      persistAuthorization: true,
+      operationsSorter: (a: any, b: any)=>{
+        const methodOrder: Record<string, number> = {
+          get: 1,
+          post: 2,
+          patch: 3,
+          delete: 4,
+        };
+        return(
+          (methodOrder[a.get('method')]?? 99) -(methodOrder[b.get('method')]?? 99)
+        )
+      },
+
+      tagsSorter:(a: string, b: string)=> {
+        const tagOrder: Record<string, number>={
+          Authentication: 1,
+          Products: 2
+        };
+        return(
+          (tagOrder[a]?? 99) - (tagOrder[b]?? 99)
+        )
+      }
     }
   })
 
