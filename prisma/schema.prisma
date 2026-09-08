@@ -13,6 +13,23 @@ enum UserRole {
   CUSTOMER
 }
 
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum PaymentProvider {
+  PAYSTACK
+}
+
 model User {
   id        String   @id @default(uuid()) @db.Uuid
   email     String   @unique @db.VarChar(255)
@@ -23,6 +40,8 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  orders order[]
 
   @@index([role])
   @@map("users")
@@ -40,8 +59,60 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  orderItems orderItem[]
+
   @@index([category])
   @@index([createdAt])
   @@index([name])
   @@map("products")
+}
+
+model order {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @db.Uuid
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal     @db.Decimal(12, 2)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items       orderItem[]
+  payment     Payment?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model orderItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  orderId   String  @db.Uuid
+  productId String  @db.Uuid
+  quantity  Int
+  unitPrice Decimal @db.Decimal(12, 2)
+  subtotal  Decimal @db.Decimal(12, 2)
+  order     order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model Payment {
+  id        String          @id @default(uuid()) @db.Uuid
+  orderId   String          @unique @db.Uuid
+  order     order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  reference String          @unique @db.VarChar(100)
+  amount    Decimal         @db.Decimal(12, 2)
+  status    PaymentStatus   @default(PENDING)
+  provider  PaymentProvider @default(PAYSTACK)
+  paidAt    DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([status])
+  @@index([provider])
+  @@index([createdAt])
+  @@map("payments")
 }
