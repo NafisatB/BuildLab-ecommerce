@@ -128,4 +128,52 @@ export class OrderService {
             throw new BadRequestException('Each product can only appear once in an order')
         }
     }
+
+    async findAll(userId: string) {
+        const orders = await this.database.order.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                items: {
+                    include: {
+                        product: {
+                            select: {
+                                id: true,
+                                name: true,
+                                imageUrl: true
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        return {
+            orders,
+        }
+    }
+
+    async findOne(orderId: string, userId: string) {
+        const order = await this.database.order.findFirst({
+            where: { id: orderId, userId },
+            include: {
+                items: {
+                    include: {
+                        product: {
+                            select: {
+                                id: true,
+                                name: true,
+                                imageUrl: true
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        if(!order){
+            throw new NotFoundException('Order not found')
+        }
+        return{
+            order
+        }
+    }
 }
