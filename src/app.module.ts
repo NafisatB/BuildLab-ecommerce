@@ -7,11 +7,12 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { OrderModule } from './order/order.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, }),
-    ProductsModule, DatabaseModule, AuthModule, UsersModule, OrderModule],
+    ProductsModule, DatabaseModule, AuthModule, UsersModule, OrderModule, PaymentsModule],
   controllers: [AppController],
   providers: [AppService],
 })
