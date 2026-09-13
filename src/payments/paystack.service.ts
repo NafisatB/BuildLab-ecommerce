@@ -23,6 +23,8 @@ interface PaystackVerifyResponse {
         amount: number;
         currency: string;
         paid_at?: string;
+        message: string;
+        gateway_response?: string;
     }
 }
 
@@ -87,7 +89,13 @@ export class PaystackService implements PaymentProvider {
                 reference: response.data.data.reference,
                 amount: response.data.data.amount,
                 currency: response.data.data.currency,
-                paidAt: response.data.data.paid_at
+                paidAt: response.data.data.paid_at,
+                message: response.data.data.message,
+                gatewayResponse: response.data.data.gateway_response
+
+
+
+
             }
 
         } catch (error) {

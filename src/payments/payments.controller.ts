@@ -31,4 +31,26 @@ export class PaymentsController {
             orderId, request.user.userId
         )
     }
+
+    @Post('verify/:reference')
+    @UseGuards(JwtAuthGuard)
+    @ApiOperation({
+        summary: 'Verify a Paystack payment',
+        description:
+            'Verifies a payment with Paystack and updates the payment and order status.',
+    })
+    @ApiParam({
+        name: 'reference',
+        description:
+            'Paystack transaction reference',
+    })
+    async verify(
+        @Req() request: AuthenticatedRequest,
+        @Param('reference') reference: string,
+    ) {
+        return this.paymentService.verify(
+            reference,
+            request.user.userId,
+        );
+    }
 }

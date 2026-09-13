@@ -18,7 +18,9 @@ export interface VerifyPaymentResult{
     reference: string;
     amount: number;
     currency: string;
-    paidAt?: string
+    paidAt?: string;
+    message: string;
+    gatewayResponse?: string;
 }
 
 export interface PaymentProvider{
