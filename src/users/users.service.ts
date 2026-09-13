@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
-import { Prisma } from 'generated/prisma/client';
+import { Prisma, UserRole } from 'generated/prisma/client';
 import { DatabaseService } from 'src/database/database.service';
+import { PasswordService } from '../auth/password/password.service'
 
 interface CreateUserInput{
     email: string;
@@ -13,7 +14,11 @@ interface CreateUserInput{
 export class UsersService {
     private readonly logger = new Logger(UsersService.name);
     
-    constructor(private readonly database: DatabaseService){}
+    
+    constructor(
+        private readonly database: DatabaseService, 
+        private readonly passwordService: PasswordService
+    ){}
 
     private normalizeEmail(email: string): string{
         return email.trim().toLowerCase();
@@ -70,5 +75,36 @@ export class UsersService {
                 updatedAt: true
             }
         })
+    }
+
+    async createAdmin(input: CreateUserInput){
+        const email = input.email.trim().toLowerCase();
+
+        try {
+            const passwordHash = await this.passwordService.hash(input.password)
+
+            return await this.database.user.create({
+                data: {
+                    email,
+                    password: passwordHash,
+                    firstName: input.firstName.trim(),
+                    lastName: input.lastName.trim(),
+                    role: UserRole.ADMIN
+                },
+                select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                    role: true,
+                    createdAt: true
+                }
+            })
+        } catch (error) {
+            if(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'){
+                throw new ConflictException('A user with this email already exists')
+            }
+            throw error
+        }
     }
 }
