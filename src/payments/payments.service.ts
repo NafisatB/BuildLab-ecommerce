@@ -2,7 +2,9 @@ import crypto from 'node:crypto';
 import { ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import { PaystackService } from './paystack.service';
-import { stat } from 'node:fs';
+import { ConfigService } from '@nestjs/config';
+import { PaystackWebhookPayload } from './paystack-webhook';
+
 
 
 @Injectable()
@@ -11,7 +13,8 @@ export class PaymentsService {
 
     constructor(
         private readonly database: DatabaseService,
-        private readonly paystackService: PaystackService
+        private readonly paystackService: PaystackService,
+        private readonly configService: ConfigService
     ) { }
 
     async initialize(orderId: string, userId: string) {
@@ -108,23 +111,23 @@ export class PaymentsService {
                                 },
                             });
 
-                            if(remainingPending === 0){
-                                await tx.order.update({
-                                    where: {id: orderId},
-                                    data: {status: 'FAILED'}
-                                })
-                            }
+                        if (remainingPending === 0) {
+                            await tx.order.update({
+                                where: { id: orderId },
+                                data: { status: 'FAILED' }
+                            })
+                        }
                     })
 
                 } catch (error) {
-                    this.logger.error('Failed to clean up payment initialization', error instanceof Error ? error.stack: undefined)
+                    this.logger.error('Failed to clean up payment initialization', error instanceof Error ? error.stack : undefined)
                 }
             }
 
-            if(error instanceof NotFoundException || error instanceof ConflictException){
+            if (error instanceof NotFoundException || error instanceof ConflictException) {
                 throw error;
             }
-            this.logger.error('Payment initialization failed', error instanceof Error ? error.stack: undefined)
+            this.logger.error('Payment initialization failed', error instanceof Error ? error.stack : undefined)
 
             throw new InternalServerErrorException('Unable to initialized payment')
         }
@@ -201,139 +204,239 @@ export class PaymentsService {
             }
         }
     }
+
     private async markPaymentSuccessful(
         paymentId: string,
         orderId: string,
         paidAt?: string,
     ) {
-        try {
-            return await this.database.$transaction(
-                async (tx) => {
-                    const payment =
-                        await tx.payment.findUnique({
-                            where: {
-                                id: paymentId,
-                            },
-                        });
+        return this.database.$transaction(async (tx) => {
+            const payment = await tx.payment.findUnique({
+                where: { id: paymentId },
+            });
 
-                    if (!payment) {
-                        throw new NotFoundException(
-                            'Payment not found',
-                        );
-                    }
-
-                    if (payment.status === 'SUCCESS') {
-                        const order =
-                            await tx.order.findUnique({
-                                where: {
-                                    id: orderId,
-                                },
-                            });
-
-                        return {
-                            message:
-                                'Payment already verified',
-                            payment,
-                            order,
-                        };
-                    }
-
-                    const updatedPayment =
-                        await tx.payment.update({
-                            where: {
-                                id: paymentId,
-                            },
-                            data: {
-                                status: 'SUCCESS',
-                                paidAt: paidAt
-                                    ? new Date(paidAt)
-                                    : new Date(),
-                            },
-                        });
-
-                    const updatedOrder =
-                        await tx.order.update({
-                            where: {
-                                id: orderId,
-                            },
-                            data: {
-                                status: 'PAID',
-                            },
-                        });
-
-                    return {
-                        message:
-                            'Payment verified successfully',
-                        payment: updatedPayment,
-                        order: updatedOrder,
-                    };
-                },
-            );
-        } catch (error) {
-            if (
-                error instanceof NotFoundException
-            ) {
-                throw error;
+            if (!payment) {
+                throw new NotFoundException('Payment not found');
             }
 
-            this.logger.error(
-                'Failed to mark payment as successful',
-                error instanceof Error
-                    ? error.stack
-                    : undefined,
-            );
+            if (payment.status === 'SUCCESS') {
+                return {
+                    message: 'Payment already verified',
+                    payment,
+                };
+            }
 
-            throw new InternalServerErrorException(
-                'Unable to complete payment processing',
-            );
-        }
+            if (payment.status === 'FAILED') {
+                throw new ConflictException(
+                    'A failed payment cannot be marked as successful',
+                );
+            }
+
+            const order = await tx.order.findUnique({
+                where: { id: orderId },
+            });
+
+            if (!order) {
+                throw new NotFoundException('Order not found');
+            }
+
+            if (order.status === 'PAID') {
+                return {
+                    message: 'Order already paid',
+                    payment,
+                    order,
+                };
+            }
+
+            if (order.status !== 'PENDING') {
+                throw new ConflictException(
+                    `Order cannot be marked as paid from ${order.status} status`,
+                );
+            }
+
+            const updatedPayment = await tx.payment.update({
+                where: { id: paymentId },
+                data: {
+                    status: 'SUCCESS',
+                    paidAt: paidAt ? new Date(paidAt) : new Date(),
+                },
+            });
+
+            const updatedOrder = await tx.order.update({
+                where: { id: orderId },
+                data: {
+                    status: 'PAID',
+                },
+            });
+
+            return {
+                message: 'Payment verified successfully',
+                payment: updatedPayment,
+                order: updatedOrder,
+            };
+        });
     }
 
     private async markPaymentFailed(
         paymentId: string,
         orderId: string,
     ) {
-        try {
-            return await this.database.$transaction(
-                async (tx) => {
-                    const payment =
-                        await tx.payment.update({
-                            where: {
-                                id: paymentId,
-                            },
-                            data: {
-                                status: 'FAILED',
-                            },
-                        });
+        return this.database.$transaction(async (tx) => {
+            const payment = await tx.payment.findUnique({
+                where: { id: paymentId },
+            });
 
-                    const order =
-                        await tx.order.update({
-                            where: {
-                                id: orderId,
-                            },
-                            data: {
-                                status: 'FAILED',
-                            },
-                        });
+            if (!payment) {
+                throw new NotFoundException('Payment not found');
+            }
 
-                    return {
-                        message: 'Payment failed',
-                        payment,
-                        order,
-                    };
+            if (payment.status === 'FAILED') {
+                return {
+                    message: 'Payment already marked as failed',
+                    payment,
+                };
+            }
+
+            if (payment.status === 'SUCCESS') {
+                throw new ConflictException(
+                    'A successful payment cannot be marked as failed',
+                );
+            }
+
+            const order = await tx.order.findUnique({
+                where: { id: orderId },
+            });
+
+            if (!order) {
+                throw new NotFoundException('Order not found');
+            }
+
+            if (order.status === 'PAID') {
+                throw new ConflictException(
+                    'A paid order cannot be marked as failed',
+                );
+            }
+
+            const updatedPayment = await tx.payment.update({
+                where: { id: paymentId },
+                data: {
+                    status: 'FAILED',
                 },
-            );
-        } catch (error) {
-            this.logger.error(
-                'Failed to update failed payment',
-                error instanceof Error
-                    ? error.stack
-                    : undefined,
+            });
+
+            const updatedOrder = await tx.order.update({
+                where: { id: orderId },
+                data: {
+                    status: 'FAILED',
+                },
+            });
+
+            return {
+                message: 'Payment failed',
+                payment: updatedPayment,
+                order: updatedOrder,
+            };
+        });
+    }
+
+    verifyWebhookSignature(
+        rawBody: Buffer,
+        signature: string,
+    ): boolean {
+        const secretKey =
+            this.configService.getOrThrow<string>(
+                'PAYSTACK_SECRET_KEY',
             );
 
-            throw new InternalServerErrorException(
-                'Unable to update payment status',
-            );
+        const expectedSignature =
+            crypto
+                .createHmac('sha512', secretKey)
+                .update(rawBody)
+                .digest('hex');
+
+        const expectedBuffer =
+            Buffer.from(expectedSignature, 'utf8');
+
+        const receivedBuffer =
+            Buffer.from(signature, 'utf8');
+
+        if (
+            expectedBuffer.length !== receivedBuffer.length
+        ) {
+            return false;
         }
+
+        return crypto.timingSafeEqual(
+            expectedBuffer,
+            receivedBuffer,
+        );
+    }
+
+    async handlePaystackWebhook(
+        payload: PaystackWebhookPayload,
+    ) {
+        if (payload.event !== 'charge.success') {
+            return {
+                message: 'Event ignored',
+            };
+        }
+
+        const transaction = payload.data;
+
+        if (
+            transaction.status !== 'success' ||
+            !transaction.reference
+        ) {
+            return {
+                message: 'Payment event ignored',
+            };
+        }
+
+        const payment =
+            await this.database.payment.findUnique({
+                where: {
+                    reference: transaction.reference,
+                },
+            });
+
+        if (!payment) {
+            this.logger.warn(
+                `Webhook received for unknown payment reference: ${transaction.reference}`,
+            );
+
+            return {
+                message: 'Payment reference not found',
+            };
+        }
+
+        const expectedAmount =
+            payment.amount.mul(100).toNumber();
+
+        if (
+            Math.round(transaction.amount) !== expectedAmount
+        ) {
+            this.logger.error(
+                `Payment amount mismatch for ${transaction.reference}`,
+            );
+
+            await this.database.payment.update({
+                where: {
+                    id: payment.id,
+                },
+                data: {
+                    status: 'FAILED',
+                },
+            });
+
+            return {
+                message: 'Payment amount mismatch',
+            };
+        }
+
+        return this.markPaymentSuccessful(
+            payment.id,
+            payment.orderId,
+            transaction.paid_at,
+        );
     }
 }

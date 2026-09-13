@@ -1,8 +1,10 @@
-import { Controller, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Controller, Param, ParseUUIDPipe, Post, Headers, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import type { AuthenticatedRequest } from 'src/auth/types/authenticated-request';
+import { Request } from 'express';
 
 @ApiTags('Payments')
 @ApiBearerAuth('access-token')
@@ -51,6 +53,41 @@ export class PaymentsController {
         return this.paymentService.verify(
             reference,
             request.user.userId,
+        );
+    }
+
+    @Post('webhook/paystack')
+    async handlePaystackWebhook(
+        @Req() request: RawBodyRequest<Request>,
+        @Headers('x-paystack-signature')
+        signature: string | undefined,
+    ) {
+        if (!signature) {
+            throw new UnauthorizedException(
+                'Missing Paystack signature',
+            );
+        }
+
+        if (!request.rawBody) {
+            throw new UnauthorizedException(
+                'Raw request body is unavailable',
+            );
+        }
+
+        const isValid =
+            this.paymentService.verifyWebhookSignature(
+                request.rawBody,
+                signature,
+            );
+
+        if (!isValid) {
+            throw new UnauthorizedException(
+                'Invalid Paystack signature',
+            );
+        }
+
+        return this.paymentService.handlePaystackWebhook(
+            request.body,
         );
     }
 }
