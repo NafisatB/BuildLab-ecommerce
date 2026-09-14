@@ -1,17 +1,20 @@
-import {ArgumentsHost,Catch,ExceptionFilter,HttpStatus} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
 import { Prisma } from 'generated/prisma/client';
 
 @Catch(Prisma.PrismaClientKnownRequestError)
 export class PrismaExceptionFilter
-  implements ExceptionFilter
-{
+  implements ExceptionFilter {
   catch(
     exception: Prisma.PrismaClientKnownRequestError,
     host: ArgumentsHost,
   ) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+
+    console.error('Code:', exception.code);
+    console.error('Message:', exception.message);
+    console.error('Meta:', exception.meta);
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'A database error occurred';
@@ -38,3 +41,5 @@ export class PrismaExceptionFilter
     });
   }
 }
+
+

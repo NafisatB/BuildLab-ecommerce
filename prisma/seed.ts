@@ -23,7 +23,10 @@ const firstName = adminFirstName.trim();
 const lastName = adminLastName.trim()
 
 const adapter = new PrismaPg({
-    connectionString
+    connectionString,
+    ssl: {
+        rejectUnauthorized: false,
+    },
 });
 
 const prisma = new PrismaClient({
@@ -74,6 +77,12 @@ async function main() {
 }
 main().catch((error) => {
     console.error('Admin seed failed:', error)
+
+    if (error instanceof Error) {
+        console.error('Message:', error.message);
+        console.error('Cause:', error.cause);
+        console.error('Stack:', error.stack);
+    }
     process.exit(1)
 })
     .finally(async () => {
