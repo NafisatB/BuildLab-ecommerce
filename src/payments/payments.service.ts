@@ -4,6 +4,7 @@ import { DatabaseService } from 'src/database/database.service';
 import { PaystackService } from './paystack.service';
 import { ConfigService } from '@nestjs/config';
 import { PaystackWebhookPayload } from './paystack-webhook';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 
 
@@ -14,7 +15,8 @@ export class PaymentsService {
     constructor(
         private readonly database: DatabaseService,
         private readonly paystackService: PaystackService,
-        private readonly configService: ConfigService
+        private readonly configService: ConfigService,
+        private readonly notificationsService: NotificationsService
     ) { }
 
     async initialize(orderId: string, userId: string) {
@@ -84,7 +86,7 @@ export class PaymentsService {
             })
 
             return {
-                message: 'Payment initialiazed successfully',
+                message: 'Payment initialized successfully',
                 payment: {
                     id: paymentId,
                     reference: payment.reference,
@@ -210,7 +212,7 @@ export class PaymentsService {
         orderId: string,
         paidAt?: string,
     ) {
-        return this.database.$transaction(async (tx) => {
+        const result = await this.database.$transaction(async (tx) => {
             const payment = await tx.payment.findUnique({
                 where: { id: paymentId },
             });
@@ -219,10 +221,26 @@ export class PaymentsService {
                 throw new NotFoundException('Payment not found');
             }
 
-            if (payment.status === 'SUCCESS') {
+            const order = await tx.order.findUnique({
+                where: { id: orderId },
+                include: {
+                    user: {
+                        select: {
+                            email: true
+                        }
+                    }
+                }
+            });
+
+            if (!order) {
+                throw new NotFoundException('Order not found');
+            }
+
+             if (payment.status === 'SUCCESS') {
                 return {
-                    message: 'Payment already verified',
+                    alreadyProcessed: true,
                     payment,
+                    order,
                 };
             }
 
@@ -231,21 +249,8 @@ export class PaymentsService {
                     'A failed payment cannot be marked as successful',
                 );
             }
-
-            const order = await tx.order.findUnique({
-                where: { id: orderId },
-            });
-
-            if (!order) {
-                throw new NotFoundException('Order not found');
-            }
-
             if (order.status === 'PAID') {
-                return {
-                    message: 'Order already paid',
-                    payment,
-                    order,
-                };
+                throw new ConflictException('Order has already been paid')
             }
 
             if (order.status !== 'PENDING') {
@@ -270,11 +275,32 @@ export class PaymentsService {
             });
 
             return {
-                message: 'Payment verified successfully',
+                //message: 'Payment verified successfully',
+                alreadyProcessed: false,
                 payment: updatedPayment,
-                order: updatedOrder,
+                order: {...updatedOrder, user: order.user}
             };
         });
+
+        if (
+            !result.alreadyProcessed &&
+            result.payment &&
+            result.order
+        ) {
+            await this.notificationsService.sendPaymentSuccessNotification({
+                email: result.order.user.email,
+                orderId: result.order.id,
+                paymentReference: result.payment.reference,
+                amount: result.payment.amount.toFixed(2),
+            });
+        }
+
+        return {
+            message: result.alreadyProcessed ? 'Payment already verified' : 'Payment verified successfully',
+            payment: result.payment,
+            order: result.order,
+        };
+
     }
 
     private async markPaymentFailed(
