@@ -1,7 +1,6 @@
 import { HttpService } from "@nestjs/axios";
 import { Injectable, InternalServerErrorException, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { channel } from "diagnostics_channel";
 import { firstValueFrom } from "rxjs";
 
 interface TermiiSendResponse{

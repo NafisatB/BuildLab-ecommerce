@@ -16,6 +16,9 @@ enum UserRole {
 enum OrderStatus {
   PENDING
   PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
   FAILED
   CANCELLED
 }

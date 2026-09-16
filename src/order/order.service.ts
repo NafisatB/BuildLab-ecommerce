@@ -1,11 +1,14 @@
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
-import { CreateOrderDto } from './dto/dto';
+import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderStatus } from 'generated/prisma/enums';
 import { DatabaseService } from 'src/database/database.service';
 
 @Injectable()
 export class OrderService {
     private readonly logger = new Logger(OrderService.name);
+
+    private readonly allowedTransitions: Record<OrderStatus,OrderStatus[]> = {[OrderStatus.PENDING]: [OrderStatus.FAILED,OrderStatus.CANCELLED],[OrderStatus.PAID]: [OrderStatus.PROCESSING,OrderStatus.CANCELLED],[OrderStatus.PROCESSING]: [OrderStatus.SHIPPED],[OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],[OrderStatus.DELIVERED]: [],[OrderStatus.FAILED]: [],[OrderStatus.CANCELLED]: [],
+};
 
     constructor(private readonly database: DatabaseService) { }
 
@@ -176,4 +179,52 @@ export class OrderService {
             order
         }
     }
+
+    async updateStatus(orderId: string,status:OrderStatus) {
+  return this.database.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: {id: orderId,},
+      });
+
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+
+      const allowedStatuses =this.allowedTransitions[order.status];
+
+      if (!allowedStatuses.includes(status)) {
+        throw new ConflictException(`Order cannot transition from ${order.status} to ${status}`);
+      }
+
+      const updated =await tx.order.updateMany({
+          where: {
+            id: orderId,
+            status: order.status,
+          },
+          data: {status},
+        });
+
+      if (updated.count !== 1) {
+        throw new ConflictException('Order status changed before this update could be completed');
+      }
+
+      return tx.order.findUnique({
+        where: {id: orderId},
+        include: {
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    },
+  );
+}
 }
