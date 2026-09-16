@@ -2,15 +2,21 @@ import { BadRequestException, ConflictException, Injectable, InternalServerError
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderStatus } from 'generated/prisma/enums';
 import { DatabaseService } from 'src/database/database.service';
+import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationEvent } from 'src/notifications/notification-event';
 
 @Injectable()
 export class OrderService {
     private readonly logger = new Logger(OrderService.name);
 
-    private readonly allowedTransitions: Record<OrderStatus,OrderStatus[]> = {[OrderStatus.PENDING]: [OrderStatus.FAILED,OrderStatus.CANCELLED],[OrderStatus.PAID]: [OrderStatus.PROCESSING,OrderStatus.CANCELLED],[OrderStatus.PROCESSING]: [OrderStatus.SHIPPED],[OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],[OrderStatus.DELIVERED]: [],[OrderStatus.FAILED]: [],[OrderStatus.CANCELLED]: [],
-};
+    private readonly allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
+        [OrderStatus.PENDING]: [OrderStatus.FAILED, OrderStatus.CANCELLED], [OrderStatus.PAID]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED], [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED], [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED], [OrderStatus.DELIVERED]: [], [OrderStatus.FAILED]: [], [OrderStatus.CANCELLED]: []
+    };
 
-    constructor(private readonly database: DatabaseService) { }
+    constructor(
+        private readonly database: DatabaseService,
+        private readonly notificationsService: NotificationsService
+    ) { }
 
 
     async create(
@@ -172,59 +178,109 @@ export class OrderService {
                 }
             }
         })
-        if(!order){
+        if (!order) {
             throw new NotFoundException('Order not found')
         }
-        return{
+        return {
             order
         }
     }
 
-    async updateStatus(orderId: string,status:OrderStatus) {
-  return this.database.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: {id: orderId,},
-      });
+    async updateStatus(orderId: string, status: OrderStatus) {
+        const result = this.database.$transaction(async (tx) => {
+            const order = await tx.order.findUnique({
+                where: { id: orderId },
+                include: {
+                    user: {
+                        select: {
+                            email: true,
+                            phoneNumber: true,
+                        }
+                    }
+                }
+            });
 
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
+            if (!order) {
+                throw new NotFoundException('Order not found');
+            }
 
-      const allowedStatuses =this.allowedTransitions[order.status];
+            const allowedStatuses = this.allowedTransitions[order.status];
 
-      if (!allowedStatuses.includes(status)) {
-        throw new ConflictException(`Order cannot transition from ${order.status} to ${status}`);
-      }
+            if (!allowedStatuses.includes(status)) {
+                throw new ConflictException(`Order cannot transition from ${order.status} to ${status}`);
+            }
 
-      const updated =await tx.order.updateMany({
-          where: {
-            id: orderId,
-            status: order.status,
-          },
-          data: {status},
-        });
-
-      if (updated.count !== 1) {
-        throw new ConflictException('Order status changed before this update could be completed');
-      }
-
-      return tx.order.findUnique({
-        where: {id: orderId},
-        include: {
-          items: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  price: true,
+            const updated = await tx.order.updateMany({
+                where: {
+                    id: orderId,
+                    status: order.status,
                 },
-              },
-            },
-          },
+                data: { status },
+            });
+
+            if (updated.count !== 1) {
+                throw new ConflictException('Order status changed before this update could be completed');
+            }
+
+            const updatedOrder = await tx.order.findUnique({
+                where: { id: orderId },
+                include: {
+                    user: {
+                        select: {
+                            email: true,
+                            phoneNumber: true,
+                        }
+                    },
+                    items: {
+                        include: {
+                            product: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    price: true,
+                                },
+                            },
+                        },
+                    },
+
+                },
+            });
+            if (!updatedOrder) {
+                throw new NotFoundException('Order not found')
+            }
+
+            const notificationEvent = this.getStatusNotificationEvent(status);
+
+            if (notificationEvent) {
+                await this.notificationsService.send({
+                    event: notificationEvent,
+                    email: updatedOrder.user.email,
+                    phoneNumber: updatedOrder.user.phoneNumber,
+                    orderId: updatedOrder.id
+                })
+            }
+            return updatedOrder;
+
+
         },
-      });
-    },
-  );
-}
+        );
+    }
+
+    private getStatusNotificationEvent(
+        status: OrderStatus,
+    ): NotificationEvent | null {
+        switch (status) {
+            case OrderStatus.PROCESSING:
+                return NotificationEvent.ORDER_PROCESSING;
+
+            case OrderStatus.SHIPPED:
+                return NotificationEvent.ORDER_SHIPPED;
+
+            case OrderStatus.DELIVERED:
+                return NotificationEvent.ORDER_DELIVERED;
+
+            default:
+                return null;
+        }
+    }
 }

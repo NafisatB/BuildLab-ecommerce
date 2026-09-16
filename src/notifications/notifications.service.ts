@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EmailService } from './email.service';
 import { SmsService } from './sms.service';
+import { NotificationInput } from './notification-input';
 
 @Injectable()
 export class NotificationsService {
@@ -11,54 +12,40 @@ export class NotificationsService {
         private readonly smsService: SmsService
     ) { }
 
-    async sendPaymentSuccessNotification(input: {
-        email: string;
-        phoneNumber?: string | null;
-        orderId: string;
-        paymentReference: string;
-        amount: string;
-    }): Promise<void> {
-        await Promise.allSettled([this.sendPaymentSuccessEmail(input), this.sendPaymentSuccessSms(input)])
+    async send(input: NotificationInput):Promise<void> {
+        await Promise.allSettled([this.sendEmail(input), this.sendSms(input)])
     }
 
-    private async sendPaymentSuccessEmail(input: {
-        email: string;
-        orderId: string;
-        paymentReference: string;
-        amount: string;
-    }): Promise<void> {
+    private async sendEmail(input: NotificationInput): Promise<void> {
         try {
-            await this.emailService.sendPaymentSuccessEmail({
+            await this.emailService.sendOrderNotificationEmail({
                 to: input.email,
+                event: input.event,
                 orderId: input.orderId,
                 paymentReference: input.paymentReference,
                 amount: input.amount
             });
-            this.logger.log(`Payment notification sent for order ${input.orderId}`)
+            this.logger.log(`Email notification sent for order ${input.orderId}`)
         } catch (error) {
-            this.logger.error(`Payment notification failed for order ${input.orderId}`, error instanceof Error ? error.stack : undefined)
+            this.logger.error(`Email notification failed for order ${input.orderId}`, error instanceof Error ? error.stack : undefined)
         }
     }
 
-    private async sendPaymentSuccessSms(input: {
-        phoneNumber?: string | null;
-        orderId: string;
-        paymentReference: string;
-        amount: string;
-    }): Promise<void> {
+    private async sendSms(input: NotificationInput): Promise<void> {
         if (!input.phoneNumber) {
             this.logger.debug(`SMS notification skipped for order ${input.orderId}: no phone number`);
             return;
         }
         try {
-            await this.smsService.sendPaymentSuccessSms({
+            await this.smsService.sendOrderNotificationSms({
                 phoneNumber: input.phoneNumber,
+                event: input.event,
                 orderId: input.orderId,
                 paymentReference: input.paymentReference,
                 amount: input.amount
             })
         } catch (error) {
-            this.logger.error(`Payment SMS notification failed for order ${input.orderId}`, error instanceof Error ? error.stack : undefined)
+            this.logger.error(`SMS notification failed for order ${input.orderId}`, error instanceof Error ? error.stack : undefined)
         }
     }
 

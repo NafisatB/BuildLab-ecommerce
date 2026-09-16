@@ -5,6 +5,7 @@ import { PaystackService } from './paystack.service';
 import { ConfigService } from '@nestjs/config';
 import { PaystackWebhookPayload } from './paystack-webhook';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationEvent } from 'src/notifications/notification-event';
 
 
 
@@ -288,7 +289,8 @@ export class PaymentsService {
             result.payment &&
             result.order
         ) {
-            await this.notificationsService.sendPaymentSuccessNotification({
+            await this.notificationsService.send({
+                event: NotificationEvent.PAYMENT_SUCCESS,
                 email: result.order.user.email,
                 phoneNumber: result.order.user.phoneNumber,
                 orderId: result.order.id,

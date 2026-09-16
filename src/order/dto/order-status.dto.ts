@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsEnum, IsNotEmpty } from "class-validator";
+import { IsEnum } from "class-validator";
 import { OrderStatus } from "generated/prisma/enums";
 
 export class UpdatedOrderStatusDto{
@@ -9,6 +9,5 @@ export class UpdatedOrderStatusDto{
         description: 'Status transitions are validated by the server'
     })
     @IsEnum(OrderStatus)
-    @IsNotEmpty()
     status!: OrderStatus
 }
