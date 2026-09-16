@@ -226,7 +226,8 @@ export class PaymentsService {
                 include: {
                     user: {
                         select: {
-                            email: true
+                            email: true,
+                            phoneNumber: true
                         }
                     }
                 }
@@ -289,6 +290,7 @@ export class PaymentsService {
         ) {
             await this.notificationsService.sendPaymentSuccessNotification({
                 email: result.order.user.email,
+                phoneNumber: result.order.user.phoneNumber,
                 orderId: result.order.id,
                 paymentReference: result.payment.reference,
                 amount: result.payment.amount.toFixed(2),
